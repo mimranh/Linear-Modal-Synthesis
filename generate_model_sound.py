@@ -31,6 +31,7 @@ def generate_modal_sound(frequencies, dampings, amplitudes, duration=2.0, sample
     sound = sound / np.max(np.abs(sound))
     return (sound * 32767).astype(np.int16)
 
+"""
 # --- Define some "Material" properties (Example: Steel-like) ---
 # In Step 2, these will come from your FEM/Eigenvalue solver
 freqs = [440, 885, 1320, 2100]  # Hz
@@ -43,3 +44,4 @@ plt.plot(audio_data)
 plt.show()
 wavfile.write("modal_test.wav", 44100, audio_data)
 print("Sound generated: modal_test.wav")
+"""
