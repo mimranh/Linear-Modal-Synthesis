@@ -92,3 +92,36 @@ def plot_figure_6_comparison(freqs_hz, d_ref, alpha, beta, label):
     plt.tight_layout()
     plt.savefig(f"figure6_comparison_{label}.png")
     plt.show()
+
+def plot_modal_shapes(eigenvectors, num_elements, label, num_modes_to_plot=3):
+    """
+    Plots the spatial displacement of the beam for the first few modes.
+    """
+    n_nodes = num_elements + 1
+    x_coords = np.linspace(0, 1, n_nodes)
+    
+    plt.figure(figsize=(10, 6))
+    
+    for m in range(num_modes_to_plot):
+        # Extract only the displacement DOFs (even indices: 0, 2, 4...)
+        # Note: If you used BCs, the first nodes might be missing
+        mode_data = eigenvectors[:, m]
+        displacements = mode_data[0::2] 
+        
+        # Add the fixed-end (0,0) if it was removed for BCs
+        full_displacements = np.insert(displacements, 0, 0)
+        
+        # Normalize for plotting
+        full_displacements /= np.max(np.abs(full_displacements))
+        
+        plt.plot(x_coords, full_displacements, label=f"Mode {m+1}", linewidth=2)
+
+    plt.title(f"FEM Mode Shapes: {label}")
+    plt.xlabel("Normalized Length (x/L)")
+    plt.ylabel("Relative Displacement")
+    plt.axhline(0, color='black', lw=1, ls='--')
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    plt.savefig(f"modes_{label}.png")
+    plt.show()
+    plt.close()
