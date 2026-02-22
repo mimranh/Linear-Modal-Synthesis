@@ -10,7 +10,106 @@ import plotUtility as pu
 import featureExtractor as fext # Assuming you saved the extractor here
 import spectrumAnalysis as cmp
 
+
+
 def main():
+    # 1. Define Real-World Scenarios
+    scenarios = [
+        {
+            "wav_path": "wood_door.wav", 
+            "mat_name": "wood_pine",
+            "L": 4,       
+            "thick": 0.3,  
+            "width": 5, 
+            "label": "Real_Door_Knock"
+        }
+    ]
+    
+    print("="*60)
+    print("REAL-WORLD EXAMPLE-GUIDED MODAL SYNTHESIS")
+    print("="*60)
+
+    for sc in scenarios:
+        label = sc['label']
+        print(f"\n>>> ANALYZING RECORDING: {sc['wav_path']}")
+        
+        # --- FEATURE EXTRACTION (BLUE CROSSES) ---
+        f_ref, d_ref, target_a = fext.extract_real_world_features(sc['wav_path'], n_modes=6, label=label, pltshow=False)
+        omega_ref = 2 * np.pi * f_ref
+        
+        # 2. Material Properties
+        props = mat.get_material_properties(sc["mat_name"])
+        
+        # 3. Call Updated FEM (The Digital Twin)
+        num_el = 100
+        # Now catching 4 return values from your solver
+        phys_freqs, vibrational_vectors, K_full, eigenvalues_raw = femproper.solve_proper_fem(
+            E=props["E"], rho=props["rho"], 
+            L=sc["L"], width=sc["width"], thickness=sc["thick"],
+            num_elements=num_el 
+        )
+
+        # 4. Select Frequencies for Rayleigh Matching (The Red Circles)
+        target_freqs_hz = phys_freqs[:6]
+        target_omega = target_freqs_hz * 2 * np.pi
+        
+        # 5. Rayleigh Optimization
+        alpha, beta = ro.run_point_set_matching(target_omega, d_ref, material_type=sc["mat_name"])
+        loss_val, rel_err = ro.calculate_matching_loss(target_omega, d_ref, alpha, beta)
+        
+        print(f"Extraction Results -> Ref Freqs: {f_ref}")
+        print(f"Matching Quality   -> RMSE: {loss_val:.2f} | Relative Error: {rel_err:.2f}%")
+
+        # 6. Visualization (Fig 6 a & b)
+        pu.plot_figure_6_comparison(target_freqs_hz, d_ref, alpha, beta, label)
+        
+        # 7. Modal Synthesis (The 'Tone')
+        d_est = (alpha / 2) + (beta * target_omega**2 / 2)
+        amps = target_a / np.max(target_a)
+        audio_data = gms.generate_modal_sound(target_freqs_hz, d_est, amps, duration=2)
+
+        # --- 8. RESIDUAL COMPENSATION (The 'Crunch') ---
+        # Select DOF for impact: Node 50 (middle), first DOF (displacement)
+        impact_node = 50
+        impact_dof = impact_node * 2 
+        u_res_vector = femproper.compute_residual_profile(K_full, vibrational_vectors, eigenvalues_raw, impact_dof)
+        res_amp = u_res_vector[impact_dof] # Get amplitude at the listening point
+
+
+        fs = 44100
+        t = np.linspace(0, 2.0, len(audio_data))
+        # Synthesize a highly damped noise burst for the residual
+        # Scaling by 0.1 to prevent the 'click' from being too loud
+        residual_click = (res_amp * 0.1) * np.exp(-1200 * t) * np.random.normal(0, 1, len(t))
+        
+        # Combine Modal Tone + Residual Transient
+        final_audio = audio_data + residual_click
+        
+        # --- 9. Post-Processing & Output ---
+        if np.max(np.abs(final_audio)) > 0:
+            final_audio = final_audio / np.max(np.abs(final_audio))
+            audio_data = audio_data / np.max(np.abs(audio_data))
+            residual_click = residual_click / np.max(np.abs(residual_click))
+            
+        
+        # Waveform Plot
+        plt.figure(figsize=(10, 3))
+        plt.plot(t, final_audio, label = "Final Audio")
+        plt.plot(t,residual_click, label = "Residuals", linewidth=2)
+        plt.plot(t, audio_data, label="Audio", marker='.', color='r')
+        plt.title(f"Synthesized Waveform with Residual: {label}")
+        plt.grid(True, alpha=0.3)
+        plt.legend()
+        plt.show()
+        
+        # Save Audio
+        audio_int16 = (final_audio * 32767).astype(np.int16)
+        wav_name = f"synthesized_{label}.wav"
+        wavfile.write(wav_name, fs, audio_int16)
+        print(f"Successfully synthesized {label} with Residual Compensation.")
+
+
+def main_no_residual():
     # 1. Define Real-World Scenarios
     # Make sure 'L', 'thick', and 'width' match the real objects you recorded!
     scenarios = [

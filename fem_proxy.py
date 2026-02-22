@@ -1,5 +1,7 @@
 import numpy as np
 from scipy.linalg import eigh
+from scipy.linalg import pinvh
+
 
 def get_fem_parameters(E, rho, L=1.0, width=0.01, thickness=0.01, num_elements=30):
     """
@@ -27,6 +29,29 @@ def get_fem_parameters(E, rho, L=1.0, width=0.01, thickness=0.01, num_elements=3
     frequencies_hz = np.sqrt(np.maximum(eigenvalues, 0)) / (2 * np.pi)
     
     return frequencies_hz, eigenvectors
+
+
+def compute_residual_profile(K, eigenvectors, eigenvalues, impact_node):
+    """
+    Calculates the residual displacement vector (R).
+    """
+    n_dofs = K.shape[0]
+    F = np.zeros(n_dofs)
+    F[impact_node] = 1.0  # Unit force at impact site
+
+    # 1. Static response (Total deformation)
+    # We use pinvh because K is symmetric and has 0-eigenvalues (Free-Free)
+    u_static = pinvh(K) @ F 
+
+    # 2. Subtract the first 6 modes to find what's missing
+    u_modal_sum = np.zeros(n_dofs)
+    for i in range(6):
+        phi = eigenvectors[:, i]
+        lam = eigenvalues[i] # This is omega^2
+        # Contribution of mode i to the static shape
+        u_modal_sum += (phi[impact_node] * phi) / lam
+
+    return u_static - u_modal_sum
 
 
 def get_fem_parameters1(E, rho, L=1.0, num_elements=10):
