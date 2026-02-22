@@ -41,13 +41,20 @@ def solve_proper_fem(E, rho, L, width, thickness, num_elements=40):
         
     # Boundary Condition: Fixed at one end (Cantilever)
     # Remove first two DOFs (displacement and rotation at x=0)
-    K_bc = K_global[2:, 2:]
-    M_bc = M_global[2:, 2:]
+    #K_bc = K_global[2:, 2:]
+    #M_bc = M_global[2:, 2:]
+
+    K_bc = K_global
+    M_bc = M_global
     
     # Solve Generalized Eigenvalue Problem
     eigenvalues, eigenvectors = eigh(K_bc, M_bc)
     
     # Convert Eigenvalues to Hz: f = sqrt(lambda) / 2pi
     frequencies_hz = np.sqrt(np.maximum(eigenvalues, 0)) / (2 * np.pi)
+    is_vibrational = frequencies_hz > 1.0
+    frequencies_hz = frequencies_hz[is_vibrational]
+    vibrational_vectors = eigenvectors[:, is_vibrational]
     
-    return frequencies_hz, eigenvectors
+    
+    return frequencies_hz, vibrational_vectors

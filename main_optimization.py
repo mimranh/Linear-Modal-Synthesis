@@ -7,8 +7,98 @@ import fem_solver as femproper
 import fem_proxy as fem
 import material_library as mat
 import plotUtility as pu
+import featureExtractor as fext # Assuming you saved the extractor here
+import spectrumAnalysis as cmp
 
 def main():
+    # 1. Define Real-World Scenarios
+    # Make sure 'L', 'thick', and 'width' match the real objects you recorded!
+    scenarios = [
+            {
+            "wav_path": "wood_door.wav", 
+            "mat_name": "wood_pine",
+            "L": 4,       # 80 cm
+            "thick": 0.3,  # 2 cm (thinner vibrates faster/higher)
+            "width": 5, 
+            "label": "Real_Door_Knock"
+             }
+        ]
+    
+    print("="*60)
+    print("REAL-WORLD EXAMPLE-GUIDED MODAL SYNTHESIS")
+    print("="*60)
+
+    for sc in scenarios:
+        label = sc['label']
+        print(f"\n>>> ANALYZING RECORDING: {sc['wav_path']}")
+        
+        # --- NEW: ADVANCED FEATURE EXTRACTION (BLUE CROSSES) ---
+        # This replaces the synthetic noise generation.
+        # It also triggers the 3D Waterfall Spectrogram plot.
+        
+        f_ref, d_ref, target_a = fext.extract_real_world_features(sc['wav_path'], n_modes=6, label=label, pltshow=False)
+        omega_ref = 2 * np.pi * f_ref
+        
+        # 2. Load Material Properties for FEM
+        props = mat.get_material_properties(sc["mat_name"])
+        
+        # 3. Call Proper FEM (The Digital Twin)
+        
+        num_el = 100
+        phys_freqs_all, eigenvectors_all = femproper.solve_proper_fem(
+            E=props["E"], rho=props["rho"], 
+            L=sc["L"], width=sc["width"], thickness=sc["thick"],
+            num_elements=num_el 
+        )
+        
+        valid_indices = np.where(phys_freqs_all > 1.0)[0]
+        phys_freqs = phys_freqs_all[valid_indices]
+        eigenvectors = eigenvectors_all[:, valid_indices]
+
+        # Our model's frequencies (The Red Circles)
+        target_freqs_hz = phys_freqs[:6]
+        target_omega = target_freqs_hz * 2 * np.pi
+        
+        # 4. Rayleigh Optimization (The Matching Stage)
+        # We find Alpha and Beta that make the RED circles match the BLUE crosses
+        alpha, beta = ro.run_point_set_matching(target_omega, d_ref, material_type=sc["mat_name"])
+        loss_val, rel_err = ro.calculate_matching_loss(target_omega, d_ref, alpha, beta)
+        
+        print(f"Extraction Results -> Ref Freqs: {f_ref}")
+        print(f"Matching Quality   -> RMSE: {loss_val:.2f} | Relative Error: {rel_err:.2f}%")
+
+        # 5. Visualization (Fig 6 a & b) - Now comparing Real vs Sim
+        pu.plot_figure_6_comparison(target_freqs_hz, d_ref, alpha, beta, label)
+        
+        # 6. Visualization: Physical Mode Shapes
+        #pu.plot_modal_shapes(eigenvectors, num_el, label)
+        
+        # 7. Synthesis (Auralization of the Digital Twin)
+        d_est = (alpha / 2) + (beta * target_omega**2 / 2)
+        # Use energy-weighted amplitudes for a more natural response
+        amps = target_a / np.max(target_a)
+        audio_data = gms.generate_modal_sound(target_freqs_hz, d_est, amps, duration=2)
+        
+        # --- Post-Processing ---
+        if np.max(np.abs(audio_data)) > 0:
+            audio_data = audio_data / np.max(np.abs(audio_data))
+        
+        # 8. Waveform Plot
+        plt.figure(figsize=(10, 3))
+        plt.plot(np.linspace(0, 2.0, len(audio_data)), audio_data)
+        plt.title(f"Synthesized Waveform: {label}")
+        plt.grid(True, alpha=0.3)
+        plt.show()
+        
+        # 9. Save Synthesized Audio
+        audio_int16 = (audio_data * 32767).astype(np.int16)
+        wav_name = f"synthesized_{label}.wav"
+        wavfile.write(wav_name, 44100, audio_int16)
+        print(f"Successfully synthesized {label} guided by {sc['wav_path']}")
+
+
+
+def main_dummy_example():
     # Realistic Real-Life Scenarios with full 3D dimensions
     scenarios = [
         {"name": "steel", "L": 2.0, "thick": 0.1, "width": 0.1, "label": "Steel_Beam_HEB100"},
@@ -145,7 +235,6 @@ def main_fem_proxy():
         print(f"Saved audio: {wav_name}")
 
 
-
 def Main_main():
     # Scenarios using our updated library
     scenarios = [
@@ -185,3 +274,4 @@ def Main_main():
 
 if __name__ == "__main__":
     main()
+    cmp.compare_spectra("wood_door.wav", "synthesized_Real_Door_Knock.wav")
