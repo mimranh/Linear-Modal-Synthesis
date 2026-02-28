@@ -71,3 +71,25 @@ class ModalDiagnostics:
         plt.xlabel("Time (s)")
         plt.ylabel("Energy (dB)")
         plt.show()
+
+    def plot_rayleigh_fit(self, modes, alpha, beta):
+        """
+        Plots extracted modes vs the fitted Rayleigh damping curve.
+        """
+        f_extracted = np.array([m["f"] for m in modes])
+        d_extracted = np.array([m["d"] for m in modes])
+        
+        # Sort for plotting the curve
+        f_range = np.linspace(min(f_extracted), max(f_extracted), 500)
+        w_range = 2 * np.pi * f_range
+        # Rayleigh formula: d = 0.5 * (alpha/w + beta*w)
+        d_curve = 0.5 * (alpha / w_range + beta * w_range)
+        
+        plt.figure(figsize=(8, 5))
+        plt.scatter(f_extracted, d_extracted, color='red', label='Extracted Modes')
+        plt.plot(f_range, d_curve, label='Rayleigh Fit (Material Property)')
+        plt.xlabel("Frequency (Hz)")
+        plt.ylabel("Damping (d)")
+        plt.title("Modal Damping vs. Rayleigh Model")
+        plt.legend()
+        plt.show()

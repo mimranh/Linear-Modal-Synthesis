@@ -6,7 +6,7 @@ class CrossResolutionValidator:
     def __init__(self,
                  freq_tol=20,
                  damping_tol=200,
-                 min_support=2):
+                 min_support=1):
 
         self.freq_tol = freq_tol
         self.damping_tol = damping_tol
@@ -43,7 +43,9 @@ class CrossResolutionValidator:
         for cluster in clusters:
 
             if len(cluster) < self.min_support:
-                continue
+                f_vals = np.array([m["f"] for m in cluster])
+                if np.mean(f_vals) < 200:   # low modes must be cross-supported
+                    continue
 
             freqs = np.array([m["f"] for m in cluster])
             dampings = np.array([m["d"] for m in cluster])

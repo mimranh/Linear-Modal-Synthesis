@@ -6,7 +6,7 @@ def load_audio(filepath,
                target_fs=None,
                normalize=True,
                remove_dc=True,
-               trim_silence=True):
+               trim_silence=False):
 
     # ------------------------------------------------------
     # Load audio
